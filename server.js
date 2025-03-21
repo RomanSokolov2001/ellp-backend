@@ -2,6 +2,7 @@ const express = require("express");
 const axios = require("axios");
 const cors = require("cors");
 const encryptionService = require('./utils/encryptionService');
+const utilityFunctions = require("./utils/utilityFunctions");
 require("dotenv").config();
 
 const app = express();
@@ -12,147 +13,212 @@ app.use(cors());
 
 WORDPRESS_URL = "https://erasmuslifelaspalmas.com"
 const API_KEY = process.env.API_KEY;
+const PUBLISHABLE_KEY = process.env.STRIPE_PUBLISHABLE;
+const MERCHANT_ID = process.env.STRIPE_MERCHANT_ID;
 
-const sendRequest = async (params) => {
-  try {
-    const url = `${WORDPRESS_URL}/?${new URLSearchParams(params).toString()}`;
-    const response = await axios.get(url);
-    return response.data;
-  } catch (error) {
-    return { error: error.message };
-  }
+const sendGetRequest = async (params) => {
+    try {
+        const url = `${WORDPRESS_URL}/?${new URLSearchParams(params).toString()}`;
+        return await axios.get(url);
+    } catch (error) {
+        throw Error(error.message);
+    }
 };
+
+
 process.on('uncaughtException', (err) => {
-  console.error('🔥 Uncaught Exception:', err);
-  // Decide if you want to exit or recover
-  process.exit(1); // Exit to avoid unpredictable state
+    console.error('🔥 Uncaught Exception:', err);
+    process.exit(1); // Exit to avoid unpredictable state
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-  console.error('⚠️ Unhandled Rejection:', reason);
-  // You can log it and decide if the server should keep running
+    console.error('⚠️ Unhandled Rejection:', reason);
 });
 
-// ✅ Query a member profile by email or ID
+
 app.get("/api/members/query", async (req, res) => {
-  const { email, member_id } = req.query;
+    const {email, memberId} = req.query;
 
-  if (!email && !member_id) {
-    return res.status(400).json({ result: 'error', message: "Email or member_id is required" });
-  }
-  const url = `${WORDPRESS_URL}/?swpm_api_action=query&key=${API_KEY}&${email ? `email=${email}` : `member_id=${member_id}`}`;
-
-  try {
-    const response = await axios.get(url);
-
-    if (typeof response.data === "string" && response.data.includes("<html>")) {
-      console.error("Error: Received unexpected HTML response");
-      return res.status(500).json({ result: 'error', message: "Unexpected HTML response. Check API URL or key." });
+    if (!email && !memberId) {
+        return res.status(400).json({result: 'error', message: "Email or memberId is required"});
     }
 
-    res.json(response.data); // Send back JSON response
-  } catch (error) {
-    console.error("API Error:", error.message);
-    res.status(500).json({ result: 'error', message: "API request failed", details: error.message });
-  }
+    try {
+        const responseData = await queryByEmailOrId(email, memberId);
+        res.json(responseData);
+
+    } catch (error) {
+        console.error("API Error:", error.message);
+        res.status(500).json({result: 'error', message: "API request failed", details: error.message});
+    }
 });
 
+
+app.post("/api/members/signup", async (req, res) => {
+    const {email, password, firstName, lastName, username} = req.body;
+
+    if (!email || !password || !firstName || !lastName) {
+        return res.status(400).json({result: "error", message: "Email, password, first and last names required"});
+    }
+    signup(email, username, password, firstName, lastName)
+
+    // try {
+    //     const params = {
+    //         swpm_api_action: "create",
+    //         key: API_KEY,
+    //         user_name: userName,
+    //         email: email,
+    //         password: password,
+    //         first_name: firstName,
+    //         last_name: lastName,
+    //     };
+    //
+    //     // Correct axios request: Send data in the body, not the URL
+    //     const response = await axios.post(`${WORDPRESS_URL}/`, params, {
+    //         headers: {
+    //             "Content-Type": "application/x-www-form-urlencoded", // Required for form data
+    //         },
+    //     });
+    //     console.log(response.data);
+    //     // if success =>
+    //     const paramsUpdate = {
+    //         swpm_api_action: "update",
+    //         key: API_KEY,
+    //         first_name: firstName,
+    //         last_name: lastName,
+    //         member_id: response.data.member.member_id,
+    //         account_state: "activation_required",
+    //         member_since: getFormattedCurrentDate(),
+    //     };
+    //
+    //     const responseUpdate = await axios.post(`${WORDPRESS_URL}/`, paramsUpdate, {
+    //         headers: {
+    //             "Content-Type": "application/x-www-form-urlencoded", // Required for form data
+    //         },
+    //     });
+    //     console.log(responseUpdate.data);
+    //
+    //     // Return API response to client
+    //     res.json(responseUpdate.data);
+    // } catch (error) {
+    //     console.error("Error in signup:", error.response?.data || error.message);
+    //     res.status(500).json({result: "error", message: "Server error"});
+    // }
+});
 
 // ✅ Login a member
 app.post("/api/members/login", async (req, res) => {
-  // Simple Membership API accepts param username as an email. 
-  // Proceed with this as an email but in API request will be sent as username
-  const { email, password } = req.body;
-  if (!email || !password) {
-    return res.status(400).json({ result: 'error', message: "Email and password required" });
-  };
-
-  const params = {
-    swpm_api_action: "login",
-    key: API_KEY,
-    username: email,
-    password,
-  };
-
-  const response = await sendRequest(params);
-
-  // Simple Membership API returns param result in json as success even if user account is expired or non-actve and etc
-  const isSuccessful = checkIfLoginSuccessful(response);
-  if (!isSuccessful) {
-    return res.json(
-      {
-        'result': 'failure',
-        message: response.message ? response.message : 'Unexpected error.'
-      }
-    );
-  };
-
-  // TODO: Duplicated code. Create function
-  // Query an userdataa by email to retrieve data and return JWT back
-  const url = `${WORDPRESS_URL}/?swpm_api_action=query&key=${API_KEY}&email=${email}`;
-  var queryReponse
-  try {
-    queryReponse = await axios.get(url);
-    if (typeof queryReponse.data === "string" && queryReponse.data.includes("<html>")) {
-      console.error("Error: Received unexpected HTML response. Check API URL or key.");
-
-      res.json(
-        {
-          result: 'error',
-          message: queryReponse.message ? queryReponse.message : 'Internal server error.'
-        }
-      );
+    const {email, password, userName} = req.body;
+    if ((!email && !userName) || !password) {
+        return res.status(400).json({result: 'error', message: "Email or username and password required"});
     }
 
-    // Return JWT
-    // Example Usage
-    const token = encryptionService.createToken('user@example.com');
-    const dto = createUserdataDtoFromUserdata(queryReponse.data)
-    dto.jwt = token
+    let response
 
-    console.log('Generated Token:', token);
+    try {
+        response = await loginInByEmailOrUserName(email, password, userName);
+    } catch (error) {
+        console.error("API Error:", error.message);
+        res.status(500).json({result: 'error', message: "API request failed", details: error.message});
+    }
+    console.log("test2")
 
-    const data = encryptionService.extractData(token);
-    console.log('Extracted Data:', data);
 
-    console.log('Is Token Valid?:', encryptionService.validateToken(token));
+
+    if (!utilityFunctions.isLoginSuccessful(response.data)) {
+        return res.json({'result': 'error', message: response.data.message ? response.data : 'Unexpected error.'});
+    }
+
+    try {
+        response = await queryByEmailOrId(email);
+        res.json(response);
+
+    } catch (error) {
+        console.error("API Error:", error.message);
+        res.status(500).json({result: 'error', message: "API request failed", details: error.message});
+    }
+
+    const token = encryptionService.createToken(response.data.member_data.email);
+    const dto = utilityFunctions.createUserdataDtoFromUserdata(response.data, token)
+
     res.json(dto);
-  }
-  catch (error) {
-    console.error("API Error:", error.message);
-    res.status(500).json({ result: 'error', error: "API request failed", details: error.message });
-  }
 });
+
 
 app.listen(port, () => console.log(`Server running on port ${port}`));
 
-function checkIfLoginSuccessful(response) {
-  if (response && response.message === 'The login action result: Logged In.') {
-    return true;
-  } else false;
-};
-
-function createUserdataDtoFromUserdata(responseData) {
-  if (responseData && responseData.member_data) {
-    console.log(responseData)
-    return {
-      result: 'success',
-      data: {
-        memberId: responseData.member_data.member_id,
-        username: responseData.member_data.user_name,
-        firstName: responseData.member_data.first_name,
-        lastName: responseData.member_data.last_name,
-        memberSince: responseData.member_data.member_since,
-        accountState: responseData.member_data.account_state
-      }
-    }
-  } else {
-    console.error('Unreachable userdata in query successful response')
-    throw Error('Internal server error')
-  }
-}
 
 app.use((err, req, res, next) => {
-  console.error('❌ Server Error:', err.stack);
-  res.status(500).json({ result: 'error', error: 'Internal Server Error', details: err.message });
+    console.error('Server Error:', err.stack);
+    res.status(500).json({result: 'error', message: 'Internal server error', details: err.message});
 });
+
+
+async function queryByEmailOrId(email = null, id = null) {
+    const params = {
+        swpm_api_action: "query",
+        key: API_KEY,
+        ...(email ? {email: email} : {member_id: id}),
+    };
+    try {
+        return await sendGetRequest(params);
+    } catch (error) {
+        throw Error("API Error:", error.message);
+    }
+}
+
+async function loginInByEmailOrUserName(email = null, userName = null, password = null) {
+    const params = {
+        swpm_api_action: "login",
+        key: API_KEY,
+        ...(email ? {email: email} : {username: userName}),
+        password,
+    };
+    try {
+        return await sendGetRequest(params);
+    } catch (error) {
+        throw Error(error.message);
+    }
+}
+
+async function signup(email, username, password, firstName, lastName) {
+    const params = {
+        swpm_api_action: "create",
+        key: API_KEY,
+        user_name: username,
+        email: email,
+        password: password,
+        first_name: firstName,
+        last_name: lastName,
+    };
+
+    try {
+        const response = await axios.post(`${WORDPRESS_URL}/`, params, {
+            headers: {
+                "Content-Type": "application/x-www-form-urlencoded",
+            },
+        });
+        console.log(response.data);
+        // if success =>
+        // const paramsUpdate = {
+        //   swpm_api_action: "update",
+        //   key: API_KEY,
+        //   first_name: firstName,
+        //   last_name: lastName,
+        //   member_id: response.data.member.member_id,
+        //   account_state: "activation_required",
+        //   member_since: getFormattedCurrentDate(),
+        // };
+        //
+        // const responseUpdate = await axios.post(`${WORDPRESS_URL}/`, paramsUpdate, {
+        //   headers: {
+        //     "Content-Type": "application/x-www-form-urlencoded", // Required for form data
+        //   },
+        // });
+        // console.log(responseUpdate.data);
+        //
+        // // Return API response to client
+        // res.json(responseUpdate.data);
+    } catch (error) {
+    }
+}
