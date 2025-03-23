@@ -35,7 +35,7 @@ GET /api/members/query?email={email}&member_id={id}
 **Response if success:**  
 ```json
 {
-    "results": "success",
+    "result": "success",
     "data": {
                 "memberId": "12345",
                 "username": "johndoe",
@@ -50,7 +50,7 @@ GET /api/members/query?email={email}&member_id={id}
 **Response if failure:**  
 ```json
 {
-    "results": "error",
+    "result": "error",
     "message": "Email or memberId is required"
 }
 ```
@@ -146,8 +146,11 @@ POST /api/members/signup
    ```
 3. Set up environment variables in `.env`:  
    ```sh
-   PORT=5000
-   API_KEY=your_api_key_here
+   API_KEY=""
+   JWT_SECRET=""
+   STRIPE_MERCHANT_ID=""
+   STRIPE_SECRET=""
+   STRIPE_PUBLISHABLE=""
    ```
 4. Run the server:  
    ```sh
