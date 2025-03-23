@@ -4,10 +4,13 @@ const cors = require("cors");
 const encryptionService = require('./utils/encryptionService');
 const utilityFunctions = require("./utils/utilityFunctions");
 const res = require("express/lib/response");
+const {Stripe} = require("stripe");
 require("dotenv").config();
 
 const app = express();
 const port = process.env.PORT || 5000;
+
+const stripe = new Stripe("your_secret_key");
 
 app.use(express.json());
 app.use(cors());
@@ -46,6 +49,9 @@ app.get("/api/members/query", async (req, res) => {
 
     try {
         const responseData = await queryByEmailOrId(email, memberId);
+        if (responseData.result === "failure") {
+            return res.status(400).json({result: 'error', message: responseData.message});
+        }
         res.json(responseData);
 
     } catch (error) {
@@ -58,67 +64,40 @@ app.get("/api/members/query", async (req, res) => {
 app.post("/api/members/signup", async (req, res) => {
     const {email, password, firstName, lastName, username} = req.body;
 
-    if (!email || !password || !firstName || !lastName) {
-        return res.status(400).json({result: "error", message: "Email, password, first and last names required"});
+    if (!email || !password || !firstName || !lastName || !username) {
+        return res.status(400).json({result: "error", message: "Email, username, password, first and last names required"});
     }
     const result = await signup(email, username, password, firstName, lastName)
     res.json(result);
+});
 
-    // try {
-    //     const params = {
-    //         swpm_api_action: "create",
-    //         key: API_KEY,
-    //         user_name: userName,
-    //         email: email,
-    //         password: password,
-    //         first_name: firstName,
-    //         last_name: lastName,
-    //     };
-    //
-    //     // Correct axios request: Send data in the body, not the URL
-    //     const response = await axios.post(`${WORDPRESS_URL}/`, params, {
-    //         headers: {
-    //             "Content-Type": "application/x-www-form-urlencoded", // Required for form data
-    //         },
-    //     });
-    //     console.log(response.data);
-    //     // if success =>
-    //     const paramsUpdate = {
-    //         swpm_api_action: "update",
-    //         key: API_KEY,
-    //         first_name: firstName,
-    //         last_name: lastName,
-    //         member_id: response.data.member.member_id,
-    //         account_state: "activation_required",
-    //         member_since: getFormattedCurrentDate(),
-    //     };
-    //
-    //     const responseUpdate = await axios.post(`${WORDPRESS_URL}/`, paramsUpdate, {
-    //         headers: {
-    //             "Content-Type": "application/x-www-form-urlencoded", // Required for form data
-    //         },
-    //     });
-    //     console.log(responseUpdate.data);
-    //
-    //     // Return API response to client
-    //     res.json(responseUpdate.data);
-    // } catch (error) {
-    //     console.error("Error in signup:", error.response?.data || error.message);
-    //     res.status(500).json({result: "error", message: "Server error"});
-    // }
+app.post("/create-payment-intent", async (req, res) => {
+    const { email, username } = req.body;
+
+    try {
+        const paymentIntent = await stripe.paymentIntents.create({
+            amount: 1,
+            currency: 'eur',
+            metadata: { email, username },
+        });
+
+        res.json({ clientSecret: paymentIntent.client_secret });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
 });
 
 // ✅ Login a member
 app.post("/api/members/login", async (req, res) => {
-    const {email, password, username} = req.body;
-    if ((!email && !username) || !password) {
-        return res.status(400).json({result: 'error', message: "Email or username and password required"});
+    const {email, password} = req.body;
+    if (!email || !password) {
+        return res.status(400).json({result: 'error', message: "Email and password required"});
     }
 
     let responseData
 
     try {
-        responseData = await loginInByEmailOrUserName(email, username, password);
+        responseData = await loginInByEmail(email, password);
     } catch (error) {
         console.error("API Error:", error.message);
         res.status(500).json({result: 'error', message: "API request failed", details: error.message});
@@ -166,18 +145,22 @@ async function queryByEmailOrId(email = null, id = null) {
     };
     try {
         const url = `${WORDPRESS_URL}/?${new URLSearchParams(params).toString()}`;
-        const response = await axios.get(url);
+        var response = await axios.get(url);
+
+        if (response.data.result === 'success') {
+            response.data.member_data = utilityFunctions.removePrivateUserData(response.data.member_data);
+        }
         return response.data;
     } catch (error) {
         throw Error("API Error:", error.message);
     }
 }
 
-async function loginInByEmailOrUserName(email = null, username = null, password = null) {
+async function loginInByEmail(email = null, password = null) {
     const params = {
         swpm_api_action: "login",
         key: API_KEY,
-        username: email ? email : username,
+        username: email,
         password,
     };
     try {
@@ -210,13 +193,13 @@ async function signup(email, username, password, firstName, lastName) {
 
         if (response.data.result === "failure") {
             if (response.data.errors.wp_email) {
-                message = message + ' ' + response.data.errors.wp_email;
+                message = response.data.errors.wp_email + ' ';
             }
             if (response.data.errors.user_name) {
-                message =  message + ' ' + response.data.errors.user_name;
+                message =  message + response.data.errors.user_name + ' ';
             }
             if (response.data.errors.email) {
-                message =  message + ' ' + response.data.errors.email;
+                message =  message + response.data.errors.email;
             }
             return {result: 'error', message: message };
         }
