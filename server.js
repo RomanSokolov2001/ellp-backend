@@ -3,6 +3,7 @@ const axios = require("axios");
 const cors = require("cors");
 const encryptionService = require('./utils/encryptionService');
 const utilityFunctions = require("./utils/utilityFunctions");
+const res = require("express/lib/response");
 require("dotenv").config();
 
 const app = express();
@@ -60,7 +61,8 @@ app.post("/api/members/signup", async (req, res) => {
     if (!email || !password || !firstName || !lastName) {
         return res.status(400).json({result: "error", message: "Email, password, first and last names required"});
     }
-    signup(email, username, password, firstName, lastName)
+    const result = await signup(email, username, password, firstName, lastName)
+    res.json(result);
 
     // try {
     //     const params = {
@@ -108,15 +110,15 @@ app.post("/api/members/signup", async (req, res) => {
 
 // ✅ Login a member
 app.post("/api/members/login", async (req, res) => {
-    const {email, password, userName} = req.body;
-    if ((!email && !userName) || !password) {
+    const {email, password, username} = req.body;
+    if ((!email && !username) || !password) {
         return res.status(400).json({result: 'error', message: "Email or username and password required"});
     }
 
-    let response
+    let responseData
 
     try {
-        response = await loginInByEmailOrUserName(email, password, userName);
+        responseData = await loginInByEmailOrUserName(email, username, password);
     } catch (error) {
         console.error("API Error:", error.message);
         res.status(500).json({result: 'error', message: "API request failed", details: error.message});
@@ -124,22 +126,24 @@ app.post("/api/members/login", async (req, res) => {
     console.log("test2")
 
 
-
-    if (!utilityFunctions.isLoginSuccessful(response.data)) {
-        return res.json({'result': 'error', message: response.data.message ? response.data : 'Unexpected error.'});
+    if (!utilityFunctions.isLoginSuccessful(responseData)) {
+        const isActRequired = utilityFunctions.checkIfActivationRequired(responseData)
+        if (!isActRequired) {
+            return res.json({'result': 'error', message: responseData.message ? utilityFunctions.extractErrorMessage(responseData.message) : 'Unexpected error.'});
+        }
     }
 
     try {
-        response = await queryByEmailOrId(email);
-        res.json(response);
+        responseData = await queryByEmailOrId(email);
+        // res.json(responseData);
 
     } catch (error) {
         console.error("API Error:", error.message);
         res.status(500).json({result: 'error', message: "API request failed", details: error.message});
     }
 
-    const token = encryptionService.createToken(response.data.member_data.email);
-    const dto = utilityFunctions.createUserdataDtoFromUserdata(response.data, token)
+    const token = encryptionService.createToken(responseData.member_data.email);
+    const dto = utilityFunctions.createUserdataDtoFromUserdata(responseData, token)
 
     res.json(dto);
 });
@@ -161,21 +165,25 @@ async function queryByEmailOrId(email = null, id = null) {
         ...(email ? {email: email} : {member_id: id}),
     };
     try {
-        return await sendGetRequest(params);
+        const url = `${WORDPRESS_URL}/?${new URLSearchParams(params).toString()}`;
+        const response = await axios.get(url);
+        return response.data;
     } catch (error) {
         throw Error("API Error:", error.message);
     }
 }
 
-async function loginInByEmailOrUserName(email = null, userName = null, password = null) {
+async function loginInByEmailOrUserName(email = null, username = null, password = null) {
     const params = {
         swpm_api_action: "login",
         key: API_KEY,
-        ...(email ? {email: email} : {username: userName}),
+        username: email ? email : username,
         password,
     };
     try {
-        return await sendGetRequest(params);
+        const url = `${WORDPRESS_URL}/?${new URLSearchParams(params).toString()}`;
+        const response = await axios.get(url);
+        return response.data;
     } catch (error) {
         throw Error(error.message);
     }
@@ -198,27 +206,37 @@ async function signup(email, username, password, firstName, lastName) {
                 "Content-Type": "application/x-www-form-urlencoded",
             },
         });
-        console.log(response.data);
-        // if success =>
-        // const paramsUpdate = {
-        //   swpm_api_action: "update",
-        //   key: API_KEY,
-        //   first_name: firstName,
-        //   last_name: lastName,
-        //   member_id: response.data.member.member_id,
-        //   account_state: "activation_required",
-        //   member_since: getFormattedCurrentDate(),
-        // };
-        //
-        // const responseUpdate = await axios.post(`${WORDPRESS_URL}/`, paramsUpdate, {
-        //   headers: {
-        //     "Content-Type": "application/x-www-form-urlencoded", // Required for form data
-        //   },
-        // });
-        // console.log(responseUpdate.data);
-        //
-        // // Return API response to client
-        // res.json(responseUpdate.data);
+        let message = ''
+
+        if (response.data.result === "failure") {
+            if (response.data.errors.wp_email) {
+                message = message + ' ' + response.data.errors.wp_email;
+            }
+            if (response.data.errors.user_name) {
+                message =  message + ' ' + response.data.errors.user_name;
+            }
+            if (response.data.errors.email) {
+                message =  message + ' ' + response.data.errors.email;
+            }
+            return {result: 'error', message: message };
+        }
+        const paramsUpdate = {
+          swpm_api_action: "update",
+          key: API_KEY,
+          first_name: firstName,
+          last_name: lastName,
+          member_id: response.data.member.member_id,
+          account_state: "activation_required",
+          member_since: utilityFunctions.getFormattedCurrentDate(),
+        };
+
+        const responseUpdate = await axios.post(`${WORDPRESS_URL}/`, paramsUpdate, {
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+        });
+
+        return {result: 'success', data: responseUpdate.data};
     } catch (error) {
     }
 }

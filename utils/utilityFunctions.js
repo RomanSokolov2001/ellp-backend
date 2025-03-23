@@ -40,11 +40,33 @@ class UtilityFunctions {
         }
     }
 
-    isLoginSuccessful(response) {
-        if (response && response.message === 'The login action result: Logged In.') {
+    isLoginSuccessful(responseData) {
+        if (responseData && responseData.message === 'The login action result: Logged In.') {
             return true;
         } else false;
     };
+
+    checkIfActivationRequired(responseData) {
+        console.log(responseData.message.slice(0, 75));
+        return responseData && responseData.message.slice(0, 75) === `The login action result: <div class="swpm_login_error_activation_required">`;
+
+    }
+
+    extractErrorMessage(htmlString) {
+        if (!htmlString) {
+            return null;
+        }
+
+        // Regular expression to match content between span tags with the specific class
+        const regex = /<span class=\\?"swpm-login-error-msg swpm-red-error-text\\?">(.*?)<\/span>/;
+
+        // Execute the regex against the input string
+        const match = regex.exec(htmlString);
+
+        // If a match is found, return the captured group (the error message)
+        // Otherwise return null
+        return match ? match[1] : null;
+    }
 }
 
 module.exports = new UtilityFunctions();
