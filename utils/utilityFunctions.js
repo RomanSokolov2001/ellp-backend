@@ -1,8 +1,8 @@
 class UtilityFunctions {
     removePrivateUserData(memberData) {
         return {
-            first_name: memberData.user_name,
-            user_name: memberData.first_name,
+            first_name: memberData.first_name,
+            user_name: memberData.user_name,
             last_name: memberData.last_name,
             member_since: memberData.member_since,
             membership_level: memberData.membership_level,
@@ -47,7 +47,6 @@ class UtilityFunctions {
     };
 
     checkIfActivationRequired(responseData) {
-        console.log(responseData.message.slice(0, 75));
         return responseData && responseData.message.slice(0, 75) === `The login action result: <div class="swpm_login_error_activation_required">`;
 
     }

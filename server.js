@@ -62,7 +62,7 @@ app.get("/api/members/query", async (req, res) => {
 
 
 app.post("/api/members/signup", async (req, res) => {
-    const {email, password, firstName, lastName, username} = req.body;
+    const {email, password, username, firstName, lastName} = req.body;
 
     if (!email || !password || !firstName || !lastName || !username) {
         return res.status(400).json({result: "error", message: "Email, username, password, first and last names required"});
@@ -102,7 +102,6 @@ app.post("/api/members/login", async (req, res) => {
         console.error("API Error:", error.message);
         res.status(500).json({result: 'error', message: "API request failed", details: error.message});
     }
-    console.log("test2")
 
 
     if (!utilityFunctions.isLoginSuccessful(responseData)) {
@@ -115,6 +114,8 @@ app.post("/api/members/login", async (req, res) => {
     try {
         responseData = await queryByEmailOrId(email);
         // res.json(responseData);
+        console.log(responseData)
+
 
     } catch (error) {
         console.error("API Error:", error.message);
@@ -123,7 +124,7 @@ app.post("/api/members/login", async (req, res) => {
 
     const token = encryptionService.createToken(responseData.member_data.email);
     const dto = utilityFunctions.createUserdataDtoFromUserdata(responseData, token)
-
+    console.log(dto)
     res.json(dto);
 });
 
