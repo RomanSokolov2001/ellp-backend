@@ -15,7 +15,7 @@ const stripe = new Stripe("your_secret_key");
 app.use(express.json());
 app.use(cors());
 
-WORDPRESS_URL = "https://erasmuslifelaspalmas.com"
+const WORDPRESS_URL = "https://erasmuslifelaspalmas.com"
 const API_KEY = process.env.API_KEY;
 const PUBLISHABLE_KEY = process.env.STRIPE_PUBLISHABLE;
 const MERCHANT_ID = process.env.STRIPE_MERCHANT_ID;
