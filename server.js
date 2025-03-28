@@ -10,7 +10,7 @@ require("dotenv").config();
 const app = express();
 const port = process.env.PORT || 5000;
 
-const stripe = new Stripe("your_secret_key");
+const stripe = new Stripe(process.env.STRIPE_SECRET);
 
 app.use(express.json());
 app.use(cors());
@@ -71,18 +71,21 @@ app.post("/api/members/signup", async (req, res) => {
     res.json(result);
 });
 
-app.post("/create-payment-intent", async (req, res) => {
-    const { email, username } = req.body;
+app.get("/api/payment/create", async (req, res) => {
+    const {jwt} = req.query;
+    const {email, createdAt} = encryptionService.extractData(jwt)
+
 
     try {
         const paymentIntent = await stripe.paymentIntents.create({
             amount: 1,
             currency: 'eur',
-            metadata: { email, username },
+            metadata: { email },
         });
 
         res.json({ clientSecret: paymentIntent.client_secret });
     } catch (error) {
+        console.error("API Error:", error.message);
         res.status(500).json({ error: error.message });
     }
 });
@@ -124,7 +127,6 @@ app.post("/api/members/login", async (req, res) => {
 
     const token = encryptionService.createToken(responseData.member_data.email);
     const dto = utilityFunctions.createUserdataDtoFromUserdata(responseData, token)
-    console.log(dto)
     res.json(dto);
 });
 

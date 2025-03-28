@@ -16,7 +16,7 @@ class EncryptionService {
         const payload = JSON.stringify({ email, createdAt: Date.now() });
         let encrypted = cipher.update(payload, 'utf8', 'hex');
         encrypted += cipher.final('hex');
-
+        console.log(this.extractData(iv.toString('hex') + ':' + encrypted))
         return iv.toString('hex') + ':' + encrypted;
     }
 
