@@ -1,38 +1,23 @@
 const express = require("express");
-const axios = require("axios");
+const {Stripe} = require("stripe");
 const cors = require("cors");
+
 const encryptionService = require('./utils/encryptionService');
 const utilityFunctions = require("./utils/utilityFunctions");
-const res = require("express/lib/response");
-const {Stripe} = require("stripe");
-require("dotenv").config();
+const wpService = require("./wpService");
 
+require("dotenv").config();
+const stripe = new Stripe(process.env.STRIPE_SECRET);
 const app = express();
 const port = process.env.PORT || 5000;
 
-const stripe = new Stripe(process.env.STRIPE_SECRET);
 
 app.use(express.json());
 app.use(cors());
 
-const WORDPRESS_URL = "https://erasmuslifelaspalmas.com"
-const API_KEY = process.env.API_KEY;
-const PUBLISHABLE_KEY = process.env.STRIPE_PUBLISHABLE;
-const MERCHANT_ID = process.env.STRIPE_MERCHANT_ID;
-
-const sendGetRequest = async (params) => {
-    try {
-        const url = `${WORDPRESS_URL}/?${new URLSearchParams(params).toString()}`;
-        return await axios.get(url);
-    } catch (error) {
-        throw Error(error.message);
-    }
-};
-
-
 process.on('uncaughtException', (err) => {
     console.error('🔥 Uncaught Exception:', err);
-    process.exit(1); // Exit to avoid unpredictable state
+    process.exit(1);
 });
 
 process.on('unhandledRejection', (reason, promise) => {
@@ -40,19 +25,22 @@ process.on('unhandledRejection', (reason, promise) => {
 });
 
 
-app.get("/api/members/query", async (req, res) => {
+app.get("/v1/members/query", async (req, res) => {
     const {email, memberId} = req.query;
-
     if (!email && !memberId) {
         return res.status(400).json({result: 'error', message: "Email or memberId is required"});
     }
 
     try {
-        const responseData = await queryByEmailOrId(email, memberId);
+        const responseData = await wpService.queryByEmailOrId(email, memberId);
+
         if (responseData.result === "failure") {
             return res.status(400).json({result: 'error', message: responseData.message});
         }
-        res.json(responseData);
+
+        const data = utilityFunctions.createUserdataDtoFromUserdata(responseData);
+
+        res.json({result: 'success', data});
 
     } catch (error) {
         console.error("API Error:", error.message);
@@ -60,169 +48,101 @@ app.get("/api/members/query", async (req, res) => {
     }
 });
 
-
-app.post("/api/members/signup", async (req, res) => {
+app.post("/v1/members/signup", async (req, res) => {
     const {email, password, username, firstName, lastName} = req.body;
-
     if (!email || !password || !firstName || !lastName || !username) {
-        return res.status(400).json({result: "error", message: "Email, username, password, first and last names required"});
+        return res.status(400).json({
+            result: "error",
+            message: "Email, username, password, first and last names required"
+        });
     }
-    const result = await signup(email, username, password, firstName, lastName)
+    const result = await wpService.signup(email, username, password, firstName, lastName)
     res.json(result);
 });
 
-app.get("/api/payment/create", async (req, res) => {
-    const {jwt} = req.query;
-    const {email, createdAt} = encryptionService.extractData(jwt)
-
-
-    try {
-        const paymentIntent = await stripe.paymentIntents.create({
-            amount: 1,
-            currency: 'eur',
-            metadata: { email },
-        });
-
-        res.json({ clientSecret: paymentIntent.client_secret });
-    } catch (error) {
-        console.error("API Error:", error.message);
-        res.status(500).json({ error: error.message });
-    }
-});
-
-// ✅ Login a member
-app.post("/api/members/login", async (req, res) => {
+app.post("/v1/members/login", async (req, res) => {
     const {email, password} = req.body;
     if (!email || !password) {
         return res.status(400).json({result: 'error', message: "Email and password required"});
     }
-
     let responseData
-
     try {
-        responseData = await loginInByEmail(email, password);
+        responseData = await wpService.loginInByEmail(email, password);
     } catch (error) {
         console.error("API Error:", error.message);
         res.status(500).json({result: 'error', message: "API request failed", details: error.message});
     }
 
+    const isLoginSuccessful = utilityFunctions.checkIfLoginSuccessful(responseData)
+    const isActivationRequired = utilityFunctions.checkIfActivationRequired(responseData)
 
-    if (!utilityFunctions.isLoginSuccessful(responseData)) {
-        const isActRequired = utilityFunctions.checkIfActivationRequired(responseData)
-        if (!isActRequired) {
-            return res.json({'result': 'error', message: responseData.message ? utilityFunctions.extractErrorMessage(responseData.message) : 'Unexpected error.'});
-        }
+    if (!isLoginSuccessful && !isActivationRequired) {
+        return res.json({
+            'result': 'error',
+            message: responseData.message ? utilityFunctions.extractErrorMessage(responseData.message) : 'Unexpected error.'
+        });
     }
 
     try {
-        responseData = await queryByEmailOrId(email);
-        // res.json(responseData);
-        console.log(responseData)
-
-
+        responseData = await wpService.queryByEmailOrId(email);
     } catch (error) {
         console.error("API Error:", error.message);
         res.status(500).json({result: 'error', message: "API request failed", details: error.message});
     }
 
     const token = encryptionService.createToken(responseData.member_data.email);
-    const dto = utilityFunctions.createUserdataDtoFromUserdata(responseData, token)
+    const dto = utilityFunctions.createUserdataDtoFromUserdata(responseData, token);
     res.json(dto);
 });
 
+app.post("/v1/webhook", express.raw({type: "application/json"}), async (req, res) => {
+    const sig = req.headers["stripe-signature"];
+    const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
+
+    let event;
+
+    try {
+        event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);
+    } catch (err) {
+        console.error("Webhook Error:", err.message);
+        return res.status(400).send(`Webhook Error: ${err.message}`);
+    }
+
+    if (event.type === "payment_intent.succeeded") {
+        const paymentIntent = event.data.object;
+        const email = paymentIntent.metadata.email;
+        await wpService.queryByEmailOrId(email)
+        // TODO: add success handler and response to client
+        res.status(200).json({success: true});
+    } else {
+        res.status(400).send("Unhandled event type");
+    }
+});
+
+app.get("/v1/payment/create", async (req, res) => {
+    const {jwt} = req.query;
+    const {email, createdAt} = encryptionService.extractData(jwt)
+
+    try {
+        const paymentIntent = await stripe.paymentIntents.create({
+            amount: 1,
+            currency: 'eur',
+            metadata: {email},
+        });
+
+        res.json({clientSecret: paymentIntent.client_secret});
+    } catch (error) {
+        console.error("API Error:", error.message);
+        res.status(500).json({error: error.message});
+    }
+});
 
 app.listen(port, () => console.log(`Server running on port ${port}`));
 
-
 app.use((err, req, res, next) => {
     console.error('Server Error:', err.stack);
-    res.status(500).json({result: 'error', message: 'Internal server error', details: err.message});
+    return res.status(500).json({result: 'error', message: 'Internal server error', details: err.message});
 });
 
 
-async function queryByEmailOrId(email = null, id = null) {
-    const params = {
-        swpm_api_action: "query",
-        key: API_KEY,
-        ...(email ? {email: email} : {member_id: id}),
-    };
-    try {
-        const url = `${WORDPRESS_URL}/?${new URLSearchParams(params).toString()}`;
-        var response = await axios.get(url);
 
-        if (response.data.result === 'success') {
-            response.data.member_data = utilityFunctions.removePrivateUserData(response.data.member_data);
-        }
-        return response.data;
-    } catch (error) {
-        throw Error("API Error:", error.message);
-    }
-}
-
-async function loginInByEmail(email = null, password = null) {
-    const params = {
-        swpm_api_action: "login",
-        key: API_KEY,
-        username: email,
-        password,
-    };
-    try {
-        const url = `${WORDPRESS_URL}/?${new URLSearchParams(params).toString()}`;
-        const response = await axios.get(url);
-        return response.data;
-    } catch (error) {
-        throw Error(error.message);
-    }
-}
-
-async function signup(email, username, password, firstName, lastName) {
-    const params = {
-        swpm_api_action: "create",
-        key: API_KEY,
-        user_name: username,
-        email: email,
-        password: password,
-        first_name: firstName,
-        last_name: lastName,
-    };
-
-    try {
-        const response = await axios.post(`${WORDPRESS_URL}/`, params, {
-            headers: {
-                "Content-Type": "application/x-www-form-urlencoded",
-            },
-        });
-        let message = ''
-
-        if (response.data.result === "failure") {
-            if (response.data.errors.wp_email) {
-                message = response.data.errors.wp_email + ' ';
-            }
-            if (response.data.errors.user_name) {
-                message =  message + response.data.errors.user_name + ' ';
-            }
-            if (response.data.errors.email) {
-                message =  message + response.data.errors.email;
-            }
-            return {result: 'error', message: message };
-        }
-        const paramsUpdate = {
-          swpm_api_action: "update",
-          key: API_KEY,
-          first_name: firstName,
-          last_name: lastName,
-          member_id: response.data.member.member_id,
-          account_state: "activation_required",
-          member_since: utilityFunctions.getFormattedCurrentDate(),
-        };
-
-        const responseUpdate = await axios.post(`${WORDPRESS_URL}/`, paramsUpdate, {
-          headers: {
-            "Content-Type": "application/x-www-form-urlencoded",
-          },
-        });
-
-        return {result: 'success', data: responseUpdate.data};
-    } catch (error) {
-    }
-}

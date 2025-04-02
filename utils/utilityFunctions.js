@@ -1,6 +1,7 @@
 class UtilityFunctions {
     removePrivateUserData(memberData) {
         return {
+            member_id: memberData.member_id,
             first_name: memberData.first_name,
             user_name: memberData.user_name,
             last_name: memberData.last_name,
@@ -31,7 +32,7 @@ class UtilityFunctions {
                     lastName: responseData.member_data.last_name,
                     memberSince: responseData.member_data.member_since,
                     accountState: responseData.member_data.account_state,
-                    jwt: token
+                    ...(token && {jwt: token})
                 }
             }
         } else {
@@ -40,7 +41,7 @@ class UtilityFunctions {
         }
     }
 
-    isLoginSuccessful(responseData) {
+    checkIfLoginSuccessful(responseData) {
         if (responseData && responseData.message === 'The login action result: Logged In.') {
             return true;
         } else false;
@@ -48,7 +49,6 @@ class UtilityFunctions {
 
     checkIfActivationRequired(responseData) {
         return responseData && responseData.message.slice(0, 75) === `The login action result: <div class="swpm_login_error_activation_required">`;
-
     }
 
     extractErrorMessage(htmlString) {
