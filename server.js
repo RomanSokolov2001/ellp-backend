@@ -9,7 +9,7 @@ const wpService = require("./wpService");
 require("dotenv").config();
 const stripe = new Stripe(process.env.STRIPE_SECRET);
 const app = express();
-const port = process.env.PORT || 5000;
+const port = process.env.PORT || 6000;
 
 
 app.use(express.json());
