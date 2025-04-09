@@ -12,6 +12,7 @@ const app = express();
 const port = process.env.PORT || 6000;
 
 
+app.use("/v1/webhook", express.raw({ type: "application/json" }));
 app.use(express.json());
 app.use(cors());
 
@@ -40,7 +41,7 @@ app.get("/v1/members/query", async (req, res) => {
 
         const data = utilityFunctions.createUserdataDtoFromUserdata(responseData);
 
-        res.json({result: 'success', data});
+        res.json(data);
 
     } catch (error) {
         console.error("API Error:", error.message);
@@ -112,12 +113,15 @@ app.post("/v1/webhook", express.raw({type: "application/json"}), async (req, res
         const paymentIntent = event.data.object;
         const email = paymentIntent.metadata.email;
         await wpService.queryByEmailOrId(email)
-        // TODO: add success handler and response to client
         res.status(200).json({success: true});
     } else {
         res.status(400).send("Unhandled event type");
     }
 });
+
+app.post("/v1/health", express.raw({type: "application/json"}), async (req, res) => {
+    res.status(200).json({success: true});
+})
 
 app.get("/v1/payment/create", async (req, res) => {
     const {jwt} = req.query;
@@ -128,6 +132,9 @@ app.get("/v1/payment/create", async (req, res) => {
             amount: 1,
             currency: 'eur',
             metadata: {email},
+            payment_method_types: [
+                'card',
+            ]
         });
 
         res.json({clientSecret: paymentIntent.client_secret});
