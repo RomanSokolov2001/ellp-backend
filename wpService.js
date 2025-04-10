@@ -40,7 +40,7 @@ class WPService {
 
             return response.data;
         } catch (error) {
-            throw Error("API Error:", error.message);
+            throw Error("API Error:", error);
         }
     }
 

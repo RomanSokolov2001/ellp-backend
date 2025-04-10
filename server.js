@@ -5,6 +5,7 @@ const cors = require("cors");
 const encryptionService = require('./utils/encryptionService');
 const utilityFunctions = require("./utils/utilityFunctions");
 const wpService = require("./wpService");
+const {htmlResponses} = require("./htmlResponses");
 
 require("dotenv").config();
 const stripe = new Stripe(process.env.STRIPE_SECRET);
@@ -12,7 +13,7 @@ const app = express();
 const port = process.env.PORT || 6000;
 
 
-app.use("/v1/webhook", express.raw({ type: "application/json" }));
+app.use("/v1/webhook", express.raw({type: "application/json"}));
 app.use(express.json());
 app.use(cors());
 
@@ -25,6 +26,35 @@ process.on('unhandledRejection', (reason, promise) => {
     console.error('⚠️ Unhandled Rejection:', reason);
 });
 
+
+app.get("/v1/members/check", async (req, res) => {
+    const {email} = req.query;
+
+
+    async function checkEmailAndGetHtmlResponse(email) {
+        try {
+            const responseData = await wpService.queryByEmailOrId(email);
+            if (responseData && responseData.result === 'success') {
+                if (responseData.member_data.account_state === 'active') {
+                    const {first_name, last_name} = responseData.member_data;
+                    return res.status(200).send(htmlResponses.getSuccessHtml(first_name, last_name));
+                } else {
+                    const {first_name, last_name} = responseData.member_data;
+                    return res.status(200).send(htmlResponses.getNotActiveHtml(first_name, last_name));
+                }
+            } else {
+                return res.status(200).send(htmlResponses.getNotFoundHtml(email));
+            }
+        } catch (error) {
+            console.error(`@check: ${error}`);
+            return res.status(401).send(htmlResponses.getErrorHtml());
+        }
+    }
+
+    await checkEmailAndGetHtmlResponse(email)
+
+
+});
 
 app.get("/v1/members/query", async (req, res) => {
     const {email, memberId} = req.query;
@@ -112,7 +142,7 @@ app.post("/v1/webhook", express.raw({type: "application/json"}), async (req, res
     if (event.type === "payment_intent.succeeded") {
         const paymentIntent = event.data.object;
         const email = paymentIntent.metadata.email;
-        await wpService.queryByEmailOrId(email)
+        await wpService.activateUserByEmail(email)
         res.status(200).json({success: true});
     } else {
         res.status(400).send("Unhandled event type");
