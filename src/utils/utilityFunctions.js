@@ -21,7 +21,6 @@ class UtilityFunctions {
 
     createUserdataDtoFromUserdata(responseData, token) {
         if (responseData && responseData.member_data) {
-            console.log(responseData)
             return {
                 result: 'success',
                 data: {

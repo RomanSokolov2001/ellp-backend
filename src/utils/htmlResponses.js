@@ -31,12 +31,29 @@ class HtmlResponses {
                             font-size: 1.2rem;
                             color: green;
                         }
-                    </style>
-                </head>
+                        .message-box {
+                                width: 80%;
+                                max-width: 1000px;
+                                height: 50%;
+                                text-align: center;
+                                background: #fff;
+                                padding: 8rem;
+                                border-radius: 12px;
+                                box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+                        }
+                        .title {
+                            font-size: 10rem;
+                            margin-bottom: 1rem;
+                        }
+                        .text {
+                            font-size: 5rem;
+                        }
+                        </style>
+                    </head>
                 <body>
-                    <div class="card">
-                        <div class="name">${firstName} ${lastName}</div>
-                        <div class="status">Status: Active ✅</div>
+                    <div class="message-box">
+                        <div class="title">${firstName} ${lastName}</div>
+                        <div class="text">Status: Active ✅</div>
                     </div>
                 </body>
                 </html>
@@ -60,22 +77,28 @@ class HtmlResponses {
             color: #b00020;
         }
             .message-box {
+            width: 80%;
+            max-width: 1000px;
+            height: 50%;
             text-align: center;
             background: #fff;
-            padding: 2rem;
+            padding: 8rem;
             border-radius: 12px;
             box-shadow: 0 2px 10px rgba(0,0,0,0.05);
         }
             .title {
-            font-size: 1.8rem;
+            font-size: 10rem;
             margin-bottom: 1rem;
+        }
+              .text {
+            font-size: 5rem;
         }
         </style>
     </head>
         <body>
         <div class="message-box">
             <div class="title">🚫 Member Not Found</div>
-            <p>We couldn't locate a member with email: ${email}.</p>
+            <p class="text">We couldn't locate a member with email: ${email}.</p>
         </div>
         </body>
     </html>`
@@ -99,21 +122,27 @@ class HtmlResponses {
             color: #b00020;
         }
             .message-box {
+            width: 80%;
+            max-width: 1000px;
+            height: 50%;
             text-align: center;
             background: #fff;
-            padding: 2rem;
+            padding: 8rem;
             border-radius: 12px;
             box-shadow: 0 2px 10px rgba(0,0,0,0.05);
         }
             .title {
-            font-size: 1.8rem;
+            font-size: 10rem;
             margin-bottom: 1rem;
+        }
+              .text {
+            font-size: 5rem;
         }
         </style>
     </head>
         <body>
         <div class="message-box">
-            <p>Something went wrong on the server :(</p>
+            <p class="text">Something went wrong on the server :(</p>
         </div>
         </body>
     </html>`
@@ -135,27 +164,33 @@ class HtmlResponses {
             height: 100vh;
             color: #ff9800;
         }
-            .message-box {
+           .message-box {
+            width: 80%;
+            max-width: 1000px;
+            height: 50%;
             text-align: center;
             background: #fff;
-            padding: 2rem;
+            padding: 8rem;
             border-radius: 12px;
             box-shadow: 0 2px 10px rgba(0,0,0,0.05);
         }
             .title {
-            font-size: 1.8rem;
+            font-size: 10rem;
             margin-bottom: 1rem;
+        }
+              .text {
+            font-size: 5rem;
         }
         </style>
     </head>
         <body>
         <div class="message-box">
             <div class="title">🕒 Activation Needed</div>
-            <p>${firstName} ${lastName} isn't active yet.<br/>Please complete activation to proceed.</p>
+            <p class="text">${firstName} ${lastName} isn't active yet.<br/>Please complete activation to proceed.</p>
         </div>
         </body>
     </html>`
     }
 }
 
-export const htmlResponses = new HtmlResponses();
+module.exports = new HtmlResponses();

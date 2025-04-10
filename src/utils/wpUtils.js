@@ -1,11 +1,12 @@
 const axios = require("axios");
-const utilityFunctions = require("./utils/utilityFunctions");
+const utilityFunctions = require("./utilityFunctions");
+const htmlResponses = require("./htmlResponses");
 
 const WORDPRESS_URL = "https://erasmuslifelaspalmas.com"
 const API_KEY = process.env.API_KEY;
 
 
-class WPService {
+class WpUtils {
     async activateUserByEmail(email) {
         const prevUser = (await this.queryByEmailOrId(email)).member_data
 
@@ -112,4 +113,4 @@ class WPService {
     }
 }
 
-module.exports = new WPService();
+module.exports = new WpUtils();

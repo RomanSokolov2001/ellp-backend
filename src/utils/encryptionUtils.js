@@ -1,13 +1,12 @@
 const crypto = require('crypto');
 require("dotenv").config();
 
-// TODO: Store in .env
 const SECRET_KEY = process.env.JWT_SECRET;
 const ALGORITHM = 'aes-256-cbc';
 const IV_LENGTH = 16; // AES block size for CBC mode
 
 
-class EncryptionService {
+class EncryptionUtils {
     // Function to create a token
     createToken(email) {
         const iv = crypto.randomBytes(IV_LENGTH);
@@ -42,4 +41,4 @@ class EncryptionService {
     }
 }
 
-module.exports = new EncryptionService();
+module.exports = new EncryptionUtils();
