@@ -31,6 +31,7 @@ class WpUtils {
     }
 
     async queryByEmailOrId(email = null, id = null) {
+        console.log(API_KEY);
         const params = {
             swpm_api_action: "query",
             key: API_KEY,

@@ -1,6 +1,6 @@
 const express = require("express");
-const {Stripe} = require("stripe");
 const cors = require("cors");
+require('dotenv').config()
 
 const stripeUtils = require("./utils/stripeUtils");
 const encryptionService = require('./utils/encryptionUtils');
@@ -8,8 +8,6 @@ const wpService = require("./utils/wpUtils");
 const service = require("./service");
 
 
-require("dotenv").config();
-const stripe = new Stripe(process.env.STRIPE_SECRET);
 const app = express();
 const port = process.env.PORT || 6000;
 
@@ -74,10 +72,6 @@ app.post("/v1/webhook", express.raw({type: "application/json"}), async (req, res
     await stripeUtils.processWebhook(req.body, req.headers["stripe-signature"])
 })
 
-app.post("/v1/health", express.raw({type: "application/json"}), async (req, res) => {
-    res.status(200).json({success: true});
-})
-
 app.get("/v1/payment/create", async (req, res) => {
     const {jwt} = req.query;
     const {email, createdAt} = encryptionService.extractData(jwt)
@@ -85,6 +79,10 @@ app.get("/v1/payment/create", async (req, res) => {
 
     res.json(dto);
 });
+
+app.post("/v1/health", express.raw({type: "application/json"}), async (req, res) => {
+    res.status(200).json({success: true});
+})
 
 app.listen(port, () => console.log(`Server running on port ${port}`));
 

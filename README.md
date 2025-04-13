@@ -9,6 +9,7 @@ This backend server acts as a middleware integrating with the WordPress Simple M
 - **Member Register**: Register a new user with pre-activation rights.
 - **Create Payment Intent**: Create payment intent for further payment with Stripe.
 - **JWT Support**: Gives client a JWT. Possibility to validate.
+-  **Check subscription**: Used for QR scanning. Returns corresponding HTML. Used by collaborators to check subsription of the users.
 
 ## 🛠️ Libraries
 - **Node.js & Express** - Backend framework.
@@ -16,7 +17,7 @@ This backend server acts as a middleware integrating with the WordPress Simple M
 - **Stripe** - Payments.
 - **Crypto** - For JWT manipulations.
 
-## 📡 API Endpoints
+## 📡 API Endpoints for React Native client
 Endpoints respond with this DTO pattern:
 ```json
 {
@@ -25,8 +26,24 @@ Endpoints respond with this DTO pattern:
   "data": { ... },
 }
 ```
-### 1️⃣ Query Member Profile
-Retrieve a member's profile using an email or member ID. The developers must consider that initially WP Membership API query endpoint returns **hashed password** within the json!
+
+### 1️⃣ Check subscription
+
+As the mobile application users have QR codes to prove their subsription to collaborators, there is a endpoint for handling this, because QR code it basically an URL linked with this endpoint checking specific email.
+
+**Possible Responses:**
+- User not found
+- Member has active subscription
+- Activation required 
+
+**Endpoint:**  
+```
+GET /api/members/check?email={email}
+```
+### 2️⃣ Query Member Profile
+Retrieve a member's profile using an email or member ID. The developers must consider that initially WP Membership API query endpoint returns **hashed password** within the json! 
+
+Current implementation handles it and removes sensetive data.
 
 **Endpoint:**  
 ```
@@ -59,7 +76,7 @@ GET /api/members/query?email={email}&member_id={id}
 - Member not found
 
 
-### 2️⃣ Member Login
+### 3️⃣ Member Login
 Authenticate a member and return a JWT token.
 
 **Endpoint:**  
@@ -89,7 +106,7 @@ POST /api/members/login
 - Password empty or invalid
 - Email and password required
 
-### 3️⃣ Member Sign up
+### 4️⃣ Member Sign up
 Register a new member giving pre-activation rights to log into ELLP mobile application.
 
 **Endpoint:**  
@@ -120,19 +137,17 @@ POST /api/members/signup
 ```
 **Possible Errors:**
 - Email, username, password, first and last names required.
-- Email is already used. (Ryan.Gosling@mail.ru)
+- Email is already used.
 - Wordpress account exists with given username. But the given account...
 
 ## 🔒 Work In Progress:
-- **Stripe Payment**.
+- **Stripe Payment Testing**.
 - **Error handling**.
-- **API DTOs constructing.**.
-- **Project structuring to MVC.**.
 
 ## 🔮 Future Enhancements
-- ✅ **Stripe Payment Integration** - Manage membership payments.
-- ✅ **Collaborator Validation** - Check user membership validity with partners.
 - ✅ **Improved Error Handling** - Enhance logging and debugging capabilities.
+- ✅ **Stripe Live Payments Test** - Try out payment with real money.
+- ✅ **Auto-tests** - Add test scripts.
 
 ## 🏁 Getting Started
 1. Clone the repository:  
@@ -151,12 +166,13 @@ POST /api/members/signup
    STRIPE_MERCHANT_ID=""
    STRIPE_SECRET=""
    STRIPE_PUBLISHABLE=""
+   WEBHOOK_SECRET=""
    ```
 4. Run the server:  
    ```sh
    npm start
    ```
-5. The server will be running at `http://localhost:5000`.
+5. The server will be running at `http://localhost:6000`.
 
 ## 📜 License
 This project is licensed under the MIT License.

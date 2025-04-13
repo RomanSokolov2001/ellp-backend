@@ -6,8 +6,7 @@ const encryptionService = require("./utils/encryptionUtils");
 class Service {
     async checkEmailAndGetHtmlResponse(email) {
         try {
-            const responseData = await this.queryByEmailOrId(email);
-
+            const responseData = await wpService.queryByEmailOrId(email);
             if (responseData && responseData.result === 'success') {
                 if (responseData.member_data.account_state === 'active') {
                     const {first_name, last_name} = responseData.member_data;
@@ -43,7 +42,7 @@ class Service {
     }
 
     async tryLoginUserAndGetDto(email, password) {
-        let responseData
+        let responseData = null
         try {
             responseData = await wpService.loginInByEmail(email, password);
         } catch (error) {

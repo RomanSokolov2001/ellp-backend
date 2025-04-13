@@ -1,4 +1,5 @@
 const wpService = require("./wpUtils");
+const stripe = require('stripe')(process.env.STRIPE_SECRET);
 
 class StripeUtils {
     async getPaymentIntent(email) {
@@ -20,7 +21,7 @@ class StripeUtils {
     }
 
     async processWebhook(body, sig) {
-        const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
+        const endpointSecret = process.env.WEBHOOK_SECRET;
 
         let event;
 
